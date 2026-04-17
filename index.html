@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Magic Circle Hands AR - Multi Window Ready</title>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<style>
+body{margin:0;overflow:hidden;background:#050510;font-family:Arial,sans-serif;color:#fff}
+video,canvas{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#ui,#overlay{position:fixed;z-index:10;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);border-radius:16px}
+#ui{top:15px;left:15px;padding:10px 14px}
+#overlay{inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+button{padding:12px 20px;border:none;border-radius:999px;background:#8b5cf6;color:#fff;font-weight:700;cursor:pointer}
+.small{font-size:14px;color:#ddd;text-align:center;max-width:520px;padding:0 20px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<video class="input_video" playsinline muted></video>
+<canvas id="c"></canvas>
+<div id="ui">Magic Circle Hands AR - Multi Window Ready</div>
+<div id="overlay">
+<h2>Enable Camera</h2>
+<div class="small">Click Start and allow camera access. If blocked, run with Live Server, localhost, or HTTPS and allow camera permission in browser settings.</div>
+<button id="startBtn">Start Experience</button>
+<div id="msg" class="small"></div>
+</div>
+<script>
+const video=document.querySelector('.input_video');
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const overlay=document.getElementById('overlay');
+const msg=document.getElementById('msg');
+let W,H,started=false;
+function rs(){W=canvas.width=innerWidth;H=canvas.height=innerHeight}
+addEventListener('resize',rs);rs();
+function pt(l){return{x:l.x*W,y:l.y*H}};
+function ring(x,y,r,t,col){ctx.save();ctx.translate(x,y);ctx.rotate(t);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.shadowBlur=18;ctx.shadowColor=col;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();for(let i=0;i<8;i++){let a=i*Math.PI/4;ctx.beginPath();ctx.moveTo(Math.cos(a)*(r-10),Math.sin(a)*(r-10));ctx.lineTo(Math.cos(a)*(r+10),Math.sin(a)*(r+10));ctx.stroke()}ctx.restore();}
+function connect(a,b,col,w=2){ctx.strokeStyle=col;ctx.lineWidth=w;ctx.shadowBlur=14;ctx.shadowColor=col;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+function draw(results){ctx.clearRect(0,0,W,H);const arr=results.multiHandLandmarks||[];const t=performance.now()/1000;arr.forEach((h,idx)=>{const palm=pt(h[9]);const tips=[4,8,12,16,20].map(i=>pt(h[i]));ring(palm.x,palm.y,60+Math.sin(t*3+idx)*8,t,idx?'#00eaff':'#ff00ff');ring(palm.x,palm.y,90,-t*.7,idx?'#8aff00':'#ffd700');for(let i=0;i<tips.length;i++){connect(palm,tips[i],'#fff',1.2);for(let j=i+1;j<tips.length;j++)connect(tips[i],tips[j],idx?'#00eaff':'#ff00ff',1);ctx.beginPath();ctx.fillStyle='#fff';ctx.arc(tips[i].x,tips[i].y,4,0,6.283);ctx.fill();}});if(arr.length===2){const a=pt(arr[0][9]),b=pt(arr[1][9]);connect(a,b,'#00ffcc',4);ring((a.x+b.x)/2,(a.y+b.y)/2,55+Math.sin(t*4)*15,t*2,'#00ffcc');}}
+async function start(){
+ if(started)return;
+ started=true;
+ msg.textContent='Starting camera...';
+ try{
+   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){throw new Error('Browser does not support camera access');}
+   const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+   video.srcObject=stream;
+   video.setAttribute('autoplay',''); video.setAttribute('muted',''); video.setAttribute('playsinline','');
+   await video.play();
+   msg.textContent='Loading hand tracker...';
+   const hands=new Hands({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+   hands.setOptions({maxNumHands:2,minDetectionConfidence:.7,minTrackingConfidence:.6});
+   hands.onResults(draw);
+   const cam=new Camera(video,{onFrame:async()=>{await hands.send({image:video})},width:640,height:480});
+   await cam.start();
+   overlay.classList.add('hidden');
+ }catch(err){
+   started=false;
+   msg.textContent='Could not start: '+err.message+' | Use Live Server and allow camera.';
+   console.error(err);
+ }
+}
+document.getElementById('startBtn').addEventListener('click',start);
+</script>
+</body>
+</html>
+
+
+
